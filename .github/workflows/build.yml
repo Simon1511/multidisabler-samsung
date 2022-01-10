@@ -19,9 +19,9 @@ jobs:
         run: |
           ver=`cat .version | cut -d'-' -f1`
           sed -i "s/custom/v$ver/g" META-INF/com/google/android/update-binary
-          zip -r multidisabler-samsung-$ver.zip *
+          zip -r multidisabler-samsung-$ver-corsicanu.zip *
           echo ::set-output name=version::$ver
-          echo ::set-output name=zip::`find -name multidisabler-samsung-$ver.zip`
+          echo ::set-output name=zip::`find -name multidisabler-samsung-$ver-corsicanu.zip`
 
       - name: Tag and increment the release
         run: |
