@@ -82,7 +82,7 @@ rm_from_manifest() {
       ui_print " -   Found $i."
       md5=$( md5 $i )
       sed -i -e '/<hal format="hidl">/{N;/<name>vendor\.samsung'"$path_extra"'\.security\.'"$service"'<\/name>/{:loop;N;/<\/hal>/!bloop;d}}' $i
-      file_changed $i $md5
+      # file_changed $i $md5
     fi
   done
 }
@@ -106,7 +106,7 @@ disable_fbe() {
       # This comments out the offending line and adds an edited one.
       sed -i -e 's/^\([^#].*\)fileencryption=[^,]*\(.*\)$/# &\n\1encryptable\2/g' $i
       sed -i -e 's/^\([^#].*\)forceencrypt=[^,]*\(.*\)$/# &\n\1encryptable\2/g' $i
-      file_changed $i $md5
+      # file_changed $i $md5
     fi
   done
 }
@@ -125,7 +125,7 @@ disable_vaultkeeper() {
 	ui_print " -   Found $i."
 	md5=$( md5 $i )
 	sed -i -e 's/^[^#].*$/# &/' $i
-	file_changed $i $md5
+	# file_changed $i $md5
       fi
     done
   else
@@ -172,7 +172,7 @@ disable_cass() {
       ui_print " -   Found $i. Disabling..."
       md5=$( md5 $i )
       sed -i -e 's/^[^#].*cass.*$/# &/' -re '/\/(system|vendor)\/bin\/cass/,/^#?$/s/^[^#]*$/#&/' $i
-      file_changed $i $md5
+      # file_changed $i $md5
     fi
   done
 }
@@ -192,7 +192,7 @@ disable_proca() {
     if [ -f $i ]; then
       ui_print " -   Found $i. Disabling..."
       sed -i -e 's/^[^#]/# &/' $i
-      file_changed $i $md5
+      # file_changed $i $md5
     fi
   done
 
