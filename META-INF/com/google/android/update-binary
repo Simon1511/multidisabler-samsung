@@ -126,7 +126,7 @@ disable_fbe() {
   # MediaTek devices = fstab.mt*.
   # Snapdragon devices = fstab.qcom.
   #
-  for i in /vendor/etc/fstab.exynos* \
+  for i in /vendor/etc/fstab.*exynos* \
 	   /vendor/etc/fstab.mt* \
 	   /vendor/etc/fstab.qcom*; do
     if [ -f $i ]; then
