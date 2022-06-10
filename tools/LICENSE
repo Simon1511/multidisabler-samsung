@@ -1,0 +1,53 @@
+## Included Binary Licenses:
+
+magiskboot, magiskpolicy (Magisk): GPLv3+
+
+    Magisk, including all git submodules are free software:
+    you can redistribute it and/or modify it under the terms of the
+    GNU General Public License as published by the Free Software Foundation,
+    either version 3 of the License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+    Per Section 6(d), official compiled binaries from unmodified source:
+    https://github.com/topjohnwu/Magisk
+
+busybox: GPLv2
+
+    BusyBox is distributed under version 2 of the General Public
+    License. Version 2 is the only version of this license which this
+    version of BusyBox (or modified versions derived from this one) may
+    be distributed under.
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    Per Section 3(b), Magisk compiled binary from modified source:
+    https://git.busybox.net/busybox/
+    https://github.com/topjohnwu/ndk-busybox
+    (pre-patched source tree used to build available upon request)
+
+## Extra credits:
+	@Afaneh92
+    @ananjaser1211
+    @topjohnwu
+    @Noxxxious
+    @osm0sis
+    @arter97
+    @SuperR
+	@jcadduono
+    
+    If you consider your name should be here, don't hesitate and send me
+    an email: me <at> corsicanu <dot> ro.    
