@@ -296,6 +296,67 @@ patch_libbluetooth() {
   fi
 }
 
+patch_boot() {
+	# Set up tools for boot.img patching
+	basedir=$(pwd)
+	unzip -o "$ZIPFILE" -d /tmp
+	chmod +x /tmp/tools/magiskboot
+	chmod +x /tmp/tools/busybox
+	magiskboot=/tmp/tools/magiskboot
+	busybox=/tmp/tools/busybox
+	
+	boot=$($bb find /dev/block/platform -iname boot)
+	mkdir -p /tmp/bootimg && cd /tmp/bootimg
+    dd if=$boot of=/tmp/bootimg/old-boot.img bs=4096
+	$magiskboot unpack /tmp/bootimg/old-boot.img
+	
+	# Boot.img patches - © topjohnwu - https://github.com/topjohnwu/Magisk/blob/master/scripts/boot_patch.sh
+	KEEPVERITY=false
+	KEEPFORCEENCRYPT=false
+	for dt in dtb kernel_dtb extra; do
+		[ -f $dt ] && $magiskboot dtb $dt patch && ui_print " - Patching fstab in $dt"
+	done
+
+	if [ -f kernel ]; then
+		ui_print " - Patching kernel for RKP/DEFEX/initramfs"
+		# Remove Samsung RKP
+		$magiskboot hexpatch kernel \
+		49010054011440B93FA00F71E9000054010840B93FA00F7189000054001840B91FA00F7188010054 \
+		A1020054011440B93FA00F7140020054010840B93FA00F71E0010054001840B91FA00F7181010054
+
+		# Remove Samsung defex
+		# Before: [mov w2, #-221]   (-__NR_execve)
+		# After:  [mov w2, #-32768]
+		$magiskboot hexpatch kernel 821B8012 E2FF8F12
+
+		# Force kernel to load rootfs
+		# skip_initramfs -> want_initramfs
+		$magiskboot hexpatch kernel \
+		736B69705F696E697472616D667300 \
+		77616E745F696E697472616D667300
+	fi
+	
+	if [ -f ramdisk.cpio ]; then
+		$magiskboot cpio ramdisk.cpio extract
+		for i in fstab.*exynos* ; do
+			if [ -f $i ]; then
+				ui_print " -   Found $i, disabling encryption..."
+				md5=$( md5 $i )
+				# This comments out the offending line and adds an edited one.
+				sed -i -e 's/^\([^#].*\)fileencryption=[^,]*\(.*\)$/# &\n\1encryptable\2/g' $i
+				sed -i -e 's/^\([^#].*\)forceencrypt=[^,]*\(.*\)$/# &\n\1encryptable\2/g' $i
+				
+				$magiskboot cpio ramdisk.cpio "add 0640 $i $i"
+				# file_changed $i $md5
+			fi
+		done
+	fi
+	
+	$magiskboot repack old-boot.img
+	dd if=/tmp/bootimg/new-boot.img of=$boot bs=4096
+	cd $basedir
+}
+
 ui_print " "
 print_full_bar
 print_justified "Multi-disabler custom for Samsung devices"
@@ -364,6 +425,9 @@ fi
 
 vendor_free_size_check
 disable_fbe
+if echo $device | grep -E '[GN]9[56][05][FN]' >/dev/null; then
+	patch_boot
+fi
 disable_recovery_restoration
 
 if [ "$dp" != true ]; then
