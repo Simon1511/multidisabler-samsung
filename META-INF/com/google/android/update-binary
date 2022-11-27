@@ -116,6 +116,24 @@ vendor_free_size_check() {
   fi
 }
 
+disable_tlc() {
+  ui_print " - Removing TLC HDM/ICCC/KG..."
+  # Fully remove those
+  for i in /vendor/etc/vintf/manifest/vendor.samsung.hardware.tlc.hdm@1.1-manifest.xml \
+	   /vendor/etc/vintf/manifest/vendor.samsung.hardware.tlc.iccc@1.0-manifest.xml \
+	   /vendor/etc/vintf/manifest/vendor.samsung.hardware.tlc.kg@1.1-manifest.xml; do
+    rm $i
+  done
+
+  for i in "blockchain" "ucm" "payment"; do
+    sed -i -e '/<hal format="hidl">/{N;/<name>vendor\.samsung\.hardware\.tlc\.'"$i"'<\/name>/{:loop;N;/<\/hal>/!bloop;d}}' /vendor/etc/vintf/manifest.xml
+  done
+
+  sed -i 's/^[^#]/# &/' /vendor/etc/init/vendor.samsung.hardware.tlc.*
+
+  sed -i 's/ro\.config\.iccc\_version\=3\.0/ro\.config\.iccc\_version\=iccc\_disabled/g' /system_root/system/build.prop
+}
+
 disable_fbe() {
   local md5
   local i
@@ -124,30 +142,37 @@ disable_fbe() {
 
   # Exynos devices = fstab.exynos*.
   # MediaTek devices = fstab.mt*.
-  # Snapdragon devices = fstab.qcom.
+  # Snapdragon devices = fstab.qcom. or fstab.default.
   #
   for i in /vendor/etc/fstab.*exynos* \
 	   /vendor/etc/fstab.mt* \
-	   /vendor/etc/fstab.qcom*; do
+	   /vendor/etc/fstab.qcom* \
+	   /vendor/etc/fstab.default*; do
     if [ -f $i ]; then
       ui_print " -   Found $i."
       md5=$( md5 $i )
-      # This comments out the offending line and adds an edited one.
-      sed -i -e 's/^\([^#].*\)fileencryption=[^,]*\(.*\)$/# &\n\1encryptable\2/g' $i
-      sed -i -e 's/^\([^#].*\)forceencrypt=[^,]*\(.*\)$/# &\n\1encryptable\2/g' $i
+      # Fully remove everything related to encryption. "encryptable" is deprecated and results in a bootloop
+      sed -i -e 's/\,fileencryption\=aes\-256\-xts\:aes\-256\-cts\:v2\+inlinecrypt\_optimized\,wrappedkey\,//g' -e 's/\,keydirectory\=\/metadata\/vold\/metadata\_encryption//g' \
+             -e 's/\,inlinecrypt//g' -e 's/\,wrappedkey//g' $i
       # file_changed $i $md5
     fi
   done
+}
+
+disable_avb() {
+  ui_print " - Disabling Android Verified Boot (AVB)..."
+  sed -i -e 's/\,avb\_keys\=\/avb\/q\-gsi\.avbpubkey\:\/avb\/r\-gsi\.avbpubkey\:\/avb\/s\-gsi\.avbpubkey//g' -e 's/\,avb\=vbmeta//g' \
+         -e 's/\,avb//g' /vendor/etc/fstab.default
 }
 
 disable_vaultkeeper() {
   local md5
   local i
 
-  ui_print " - Disabling vaultkeeperd..."
+  ui_print " - Disabling vaultkeeper..."
 
   if [ $major -gt 9 ]; then
-    # This is Android 10/11: Vaultkeeper has its own init files.
+    # This is Android 10/11/12/13: Vaultkeeper has its own init files.
     #
     for i in $ANDROID_ROOT/system/etc/init/vk*.rc /vendor/etc/init/vk*.rc /vendor/etc/init/vaultkeeper*; do
       if [ -f $i ]; then
@@ -174,6 +199,9 @@ disable_vaultkeeper() {
     if [ -f $i/bin/vaultkeeperd ]; then
       ui_print " -   Found $i/bin/vaultkeeperd. Disabling..."
       chmod 0 $i/bin/vaultkeeperd
+    fi
+    if [ -f $i/bin/vendor.samsung.hardware.security.vaultkeeper@2.0-service ]; then
+      chmod 0 $i/bin/vendor.samsung.hardware.security.vaultkeeper@2.0-service
     fi
   done
 }
@@ -204,6 +232,8 @@ disable_cass() {
       # file_changed $i $md5
     fi
   done
+
+  sed -i 's/ro\.security\.cass\.feature\=1/ro\.security\.cass\.feature\=0/g' /vendor/build.prop
 }
 
 disable_proca() {
@@ -251,6 +281,8 @@ disable_recovery_restoration() {
       ui_print " -   Found $i/$r. Disabling..."
       mv $i/$r $i/$r~
 
+      sed -i -e 's/^[^#]/# &/' /vendor/etc/init/vendor_flash_recovery.rc
+
       if [ -f $i/$r~ ]; then
 	ui_print " -     ...succeeded."
       else
@@ -266,8 +298,20 @@ disable_recovery_restoration() {
   [ -z "$found" ] && ui_print " -   Found no stock recovery. Pfft."
 }
 
+disable_frp() {
+  ui_print " - Disabling Factory Reset Protection (FRP)..."
+  sed -i 's/ro\.frp\.pst\=.*/ro\.frp\.pst\=/g' /vendor/build.prop
+}
+
+fix_smart_view() {
+  ui_print " - Fixing Smart View..."
+  for i in "wlan.wfd.hdcp=disable" "wifi.interface=wlan0"; do
+    echo "$i" >> /system_root/system/build.prop
+  done
+}
+
 patch_libbluetooth() {
-  [ $major -ne 10 ] && return
+  [ $major -ne 10 || $major -ge 13 ] && return
 
   local f=$ANDROID_ROOT/system/lib64/libbluetooth.so
   local tf=/tmp/f
@@ -340,11 +384,13 @@ patch_boot() {
 		$magiskboot cpio ramdisk.cpio extract
 		for i in fstab.*exynos* ; do
 			if [ -f $i ]; then
-				ui_print " -   Found $i, disabling encryption..."
+				ui_print " -   Found $i, disabling encryption and AVB..."
 				md5=$( md5 $i )
-				# This comments out the offending line and adds an edited one.
-				sed -i -e 's/^\([^#].*\)fileencryption=[^,]*\(.*\)$/# &\n\1encryptable\2/g' $i
-				sed -i -e 's/^\([^#].*\)forceencrypt=[^,]*\(.*\)$/# &\n\1encryptable\2/g' $i
+                                sed -i -e 's/\,fileencryption\=aes\-256\-xts\:aes\-256\-cts\:v2\+inlinecrypt\_optimized\,wrappedkey\,//g' -e 's/\,keydirectory\=\/metadata\/vold\/metadata\_encryption//g' \
+                                       -e 's/\,inlinecrypt//g' -e 's/\,wrappedkey//g' $i
+
+                                sed -i -e 's/\,avb\_keys\=\/avb\/q\-gsi\.avbpubkey\:\/avb\/r\-gsi\.avbpubkey\:\/avb\/s\-gsi\.avbpubkey//g' -e 's/\,avb\=vbmeta//g' \
+                                       -e 's/\,avb//g' $i
 				
 				$magiskboot cpio ramdisk.cpio "add 0640 $i $i"
 				# file_changed $i $md5
@@ -360,13 +406,14 @@ patch_boot() {
 ui_print " "
 print_full_bar
 print_justified "Multi-disabler custom for Samsung devices"
-print_justified "running Android 9 or later."
-print_justified "by Ian Macdonald / corsicanu / afaneh92"
+print_justified "running Android 12 or later."
+print_justified "by Ian Macdonald / corsicanu / afaneh92 / Simon1511"
 print_full_bar
 ui_print " "
 
-os=$(getprop ro.build.version.release)
-major=${os%%.*}
+mount -o rw /system_root
+
+major=$(grep "ro.build.version.release=" /system_root/system/build.prop | sed 's/ro\.build\.version\.release\=//g')
 bl=$(getprop ro.boot.bootloader)
 dp=$(getprop ro.boot.dynamic_partitions)
 
@@ -390,6 +437,14 @@ elif [ $major -lt 9 ]; then
   ui_print " - This software is incompatible with Android $major."
   fatal=true
 fi
+
+# Check if running OneUI
+if ! grep -q "knox" /system_root/system/build.prop; then
+  ui_print " - Installed ROM doesn't appear to be OneUI."
+  fatal=true
+fi
+umount /system_root
+
 if [ -n "$fatal" ]; then
   ui_print " - Installation aborted."
   ui_print " "
@@ -425,22 +480,22 @@ fi
 
 vendor_free_size_check
 disable_fbe
+disable_avb
+disable_frp
 if echo $device | grep -E '[GN]9[56][05][FN]' >/dev/null; then
 	patch_boot
 fi
 disable_recovery_restoration
 
-if [ "$dp" != true ]; then
-  disable_vaultkeeper
-  disable_proca
-  [ $ZIPNAME != ${ZIPNAME/_btfix//} ] && [ $major -gt 9 ] && patch_libbluetooth
-fi
+disable_vaultkeeper
+disable_proca
+disable_tlc
+fix_smart_view
+[ $ZIPNAME != ${ZIPNAME/_btfix//} ] && [ $major -gt 9 ] && patch_libbluetooth
 
 if [ $major -gt 9 ]; then
   disable_wsm
-  if echo $device | grep -E 'G97([035][FNUW0]|7[BNUW])|N97([05][FNUW0]|6[BNQ0]|1N)|T860|F90(0[FN]|7[BN])|M[23]15F' >/dev/null; then
-    disable_cass
-  fi
+  disable_cass
 fi
 
 ui_print " - Unmounting /vendor..."
